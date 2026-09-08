@@ -59,7 +59,6 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -165,29 +164,16 @@ const topRight = new THREE.Mesh(geoB, bodyMat);
 const botLeft  = new THREE.Mesh(geoB, bodyMat); botLeft.rotation.z = Math.PI;
 logo.add(topLeft, botRight, topRight, botLeft);
 
-// mid bar — a parallelogram: vertical ends, slanted top/bottom, spanning the
-// gap so its left end meets the top-left leg and its right end meets the
-// bottom-right riser (matching the source).
-const midW = 7.3, midH = 2.05, midD = D + 0.35;
-const midGeo = new RoundedBoxGeometry(midW, midH, midD, 5, 0.14);
-midGeo.applyMatrix4(new THREE.Matrix4().set(
-  1,     0, 0, 0,
-  -0.27, 1, 0, 0,     // vertical shear: y' = y - 0.27·x  (≈ -15°)
-  0,     0, 1, 0,
-  0,     0, 0, 1,
-));
-// taper the depth — full at the left end, thinner toward the right end
-{
-  const pos = midGeo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const u = THREE.MathUtils.clamp((pos.getX(i) + midW / 2) / midW, 0, 1);
-    pos.setZ(i, pos.getZ(i) * THREE.MathUtils.lerp(1.0, 0.5, u));
-  }
-  pos.needsUpdate = true;
-  midGeo.computeVertexNormals();
-}
+// mid bar — a clean parallelogram slab (vertical ends, ~14° slanted top and
+// bottom), traced straight from the source art and extruded like the arms.
+// Its ends tuck just under the top-left leg and the bottom-right riser.
+const midShape = shapeFrom([P(88, 160), P(368, 232), P(372, 316), P(87, 248)]);
+const midGeo = new THREE.ExtrudeGeometry(midShape, {
+  depth: 1.55, bevelEnabled: true,
+  bevelThickness: 0.10, bevelSize: 0.12, bevelSegments: 3, curveSegments: 1,
+});
+midGeo.translate(0, 0, -0.55);        // sits slightly proud of the arm faces
 const midBar = new THREE.Mesh(midGeo, greenMat);
-midBar.position.set(0, 0.02, 0.28);
 logo.add(midBar);
 
 // resting pose
