@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>stapp — 3D logo</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #050506; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background:
+      radial-gradient(1200px 800px at 50% 38%, #16181d 0%, #0a0a0c 45%, #050506 100%);
+  }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
+
+  .wordmark {
+    position: fixed;
+    left: 0; right: 0;
+    bottom: clamp(24px, 7vh, 90px);
+    text-align: center;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    font-size: clamp(38px, 11vw, 130px);
+    color: rgba(240, 240, 242, 0.06);
+    user-select: none;
+    pointer-events: none;
+    text-transform: lowercase;
+  }
+  .hint {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    bottom: 18px;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.28);
+    user-select: none;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="wordmark">stapp</div>
+<div class="hint">drag to orbit · scroll to zoom</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const container = document.getElementById('app');
+
+// ---------- renderer ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.9;
+container.appendChild(renderer.domElement);
+
+// ---------- scene / camera ----------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x07070a);
+scene.fog = new THREE.FogExp2(0x07070a, 0.022);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(7, 4.5, 27);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 10;
+controls.maxDistance = 42;
+controls.target.set(0, 0, 0);
+
+// ---------- environment (reflections) ----------
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+// ---------- lights ----------
+scene.add(new THREE.AmbientLight(0x404050, 0.6));
+
+const key = new THREE.DirectionalLight(0xffffff, 1.6);
+key.position.set(8, 12, 10);
+scene.add(key);
+
+const rim = new THREE.DirectionalLight(0x6da8ff, 1.1);
+rim.position.set(-10, -4, -8);
+scene.add(rim);
+
+const greenGlow = new THREE.PointLight(0x53ff5b, 12, 30, 2);
+greenGlow.position.set(0, 0, 5);
+scene.add(greenGlow);
+
+// ---------- the logo ----------
+const logo = new THREE.Group();
+scene.add(logo);
+
+const bodyMat = new THREE.MeshStandardMaterial({
+  color: 0xcfd2d6, metalness: 0.5, roughness: 0.42,
+});
+const greenMat = new THREE.MeshStandardMaterial({
+  color: 0x7bff63, metalness: 0.3, roughness: 0.25,
+  emissive: 0x2bff33, emissiveIntensity: 0.85,
+});
+
+const D = 1.7;                    // extrude depth of the S arms
+// map source-image pixels -> world units (logo centre ≈ px 226,240)
+const CX = 226, CY = 240, SC = 38;
+const P = (px, py) => new THREE.Vector2((px - CX) / SC, (CY - py) / SC);
+
+// The "stapp" S is point-symmetric: two arm shapes, each also used rotated 180°.
+// Shape A = a horizontal stroke with a descending leg (angled foot) on the left.
+// Shape B = a horizontal stroke with a stepped drop on the right.
+const shapeAPts = [
+  P(6, 6), P(232, 6), P(232, 82), P(84, 82), P(84, 232), P(6, 205),
+];
+const shapeBPts = [
+  P(250, 6), P(445, 6), P(445, 112), P(382, 112), P(382, 82), P(250, 82),
+];
+
+function shapeFrom(pts) {
+  const s = new THREE.Shape();
+  s.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) s.lineTo(pts[i].x, pts[i].y);
+  s.closePath();
+  return s;
+}
+
+const extrudeSettings = {
+  depth: D, bevelEnabled: true,
+  bevelThickness: 0.09, bevelSize: 0.09, bevelSegments: 2, curveSegments: 1,
+};
+
+function armGeo(pts) {
+  const g = new THREE.ExtrudeGeometry(shapeFrom(pts), extrudeSettings);
+  g.translate(0, 0, -(D / 2) - 0.09);   // centre on Z
+  return g;
+}
+
+const geoA = armGeo(shapeAPts);
+const geoB = armGeo(shapeBPts);
+
+const topLeft  = new THREE.Mesh(geoA, bodyMat);
+const botRight = new THREE.Mesh(geoA, bodyMat); botRight.rotation.z = Math.PI;
+const topRight = new THREE.Mesh(geoB, bodyMat);
+const botLeft  = new THREE.Mesh(geoB, bodyMat); botLeft.rotation.z = Math.PI;
+logo.add(topLeft, botRight, topRight, botLeft);
+
+// mid bar — a parallelogram: vertical ends, slanted top/bottom, spanning the
+// gap so its left end meets the top-left leg and its right end meets the
+// bottom-right riser (matching the source).
+const midGeo = new RoundedBoxGeometry(7.3, 2.5, D + 0.6, 5, 0.16);
+midGeo.applyMatrix4(new THREE.Matrix4().set(
+  1,     0, 0, 0,
+  -0.27, 1, 0, 0,     // vertical shear: y' = y - 0.27·x  (≈ -15°)
+  0,     0, 1, 0,
+  0,     0, 0, 1,
+));
+const midBar = new THREE.Mesh(midGeo, greenMat);
+midBar.position.set(0, 0.02, 0.28);
+logo.add(midBar);
+
+// resting pose
+logo.rotation.x = -0.16;
+logo.rotation.z = 0.03;
+
+// ---------- particles ----------
+const pCount = 500;
+const pPos = new Float32Array(pCount * 3);
+for (let i = 0; i < pCount; i++) {
+  const r = 14 + Math.random() * 26;
+  const th = Math.random() * Math.PI * 2;
+  const ph = Math.acos(2 * Math.random() - 1);
+  pPos[i*3]   = r * Math.sin(ph) * Math.cos(th);
+  pPos[i*3+1] = r * Math.sin(ph) * Math.sin(th);
+  pPos[i*3+2] = r * Math.cos(ph);
+}
+const pGeo = new THREE.BufferGeometry();
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({
+  color: 0x5b6b82, size: 0.07, transparent: true, opacity: 0.7, depthWrite: false,
+}));
+scene.add(particles);
+
+// ---------- postprocessing ----------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight), 0.35, 0.45, 0.9
+);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// ---------- resize ----------
+window.addEventListener('resize', () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  composer.setSize(w, h);
+});
+
+// ---------- animate ----------
+// add #still to the URL to hold the logo face-on (orbit + zoom still work)
+const spin = !location.hash.includes('still');
+const clock = new THREE.Clock();
+function tick() {
+  const dt = clock.getDelta();
+  const t = clock.elapsedTime;
+
+  if (spin) {
+    logo.rotation.y += dt * 0.4;
+    logo.rotation.x = -0.16 + Math.sin(t * 0.5) * 0.1;
+    logo.position.y = Math.sin(t * 0.9) * 0.25;
+  }
+
+  greenGlow.intensity = 11 + Math.sin(t * 2.5) * 4;
+  greenMat.emissiveIntensity = 0.8 + Math.sin(t * 2.5) * 0.25;
+
+  particles.rotation.y += dt * 0.03;
+  particles.rotation.x += dt * 0.01;
+
+  controls.update();
+  composer.render();
+  requestAnimationFrame(tick);
+}
+tick();
+</script>
+</body>
+</html>
