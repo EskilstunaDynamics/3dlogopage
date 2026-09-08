@@ -168,13 +168,24 @@ logo.add(topLeft, botRight, topRight, botLeft);
 // mid bar — a parallelogram: vertical ends, slanted top/bottom, spanning the
 // gap so its left end meets the top-left leg and its right end meets the
 // bottom-right riser (matching the source).
-const midGeo = new RoundedBoxGeometry(7.3, 2.5, D + 0.6, 5, 0.16);
+const midW = 7.3, midH = 2.05, midD = D + 0.35;
+const midGeo = new RoundedBoxGeometry(midW, midH, midD, 5, 0.14);
 midGeo.applyMatrix4(new THREE.Matrix4().set(
   1,     0, 0, 0,
   -0.27, 1, 0, 0,     // vertical shear: y' = y - 0.27·x  (≈ -15°)
   0,     0, 1, 0,
   0,     0, 0, 1,
 ));
+// taper the depth — full at the left end, thinner toward the right end
+{
+  const pos = midGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const u = THREE.MathUtils.clamp((pos.getX(i) + midW / 2) / midW, 0, 1);
+    pos.setZ(i, pos.getZ(i) * THREE.MathUtils.lerp(1.0, 0.5, u));
+  }
+  pos.needsUpdate = true;
+  midGeo.computeVertexNormals();
+}
 const midBar = new THREE.Mesh(midGeo, greenMat);
 midBar.position.set(0, 0.02, 0.28);
 logo.add(midBar);
