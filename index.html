@@ -196,15 +196,17 @@ const topRight = new THREE.Mesh(geoB, bodyMat);
 const botLeft  = new THREE.Mesh(geoB, bodyMat); botLeft.rotation.z = Math.PI;
 logo.add(topLeft, botRight, topRight, botLeft);
 
-// mid bar — a clean parallelogram (vertical ends, 14° slanted top & bottom),
-// traced to the same proportions and placement as the source art.
-const midDepth = 1.3;
-const midShape = shapeFrom([P(86, 158), P(368, 228), P(368, 308), P(86, 238)]);
+// mid bar — a clean parallelogram (vertical ends, ~17° slanted top & bottom).
+// Its left/right edges are set flush to the top-left leg's right face and the
+// bottom-right riser's left face (px 84 and 368 -> world ±3.74), overlapping
+// ~0.1u into each, so the ends read as joined to the grey with no gap.
+const midDepth = 1.4;
+const midShape = shapeFrom([P(80, 150), P(372, 248), P(372, 338), P(80, 240)]);
 const midGeo = new THREE.ExtrudeGeometry(midShape, {
   depth: midDepth, bevelEnabled: true,
   bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 2, curveSegments: 1,
 });
-midGeo.translate(0, 0, -midDepth / 2 + 0.25);   // sits a little proud of the arms
+midGeo.translate(0, 0, -midDepth / 2 + 0.15);   // sits a little proud of the arms
 const midBar = new THREE.Mesh(midGeo, greenMat);
 logo.add(midBar);
 
